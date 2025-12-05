@@ -104,10 +104,18 @@
     </div>
 
     <script>
-        // === CONFIGURATION START ===
-
-        // !!! IMPORTANT: YOU MUST UPDATE THIS URL AFTER DEPLOYING THE GOOGLE APPS SCRIPT BELOW !!!
-        const GAS_WEB_APP_URL = "YOUR_DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE"; 
+        // === CONFIGURATION START === //
+        
+        /*
+        **********************************************************************************
+        * CRITICAL STEP: REPLACE THIS ENTIRE STRING WITH YOUR DEPLOYED GOOGLE APPS SCRIPT URL!
+        * * Deploy the 'google_apps_script.gs' file as a Web App (access: Anyone) and paste 
+        * the resulting URL here to make the app functional.
+        **********************************************************************************
+        */
+        // START: PASTE YOUR DEPLOYED URL HERE
+        const GAS_WEB_APP_URL = "YOUR_APPS_SCRIPT_URL_MUST_BE_PASTED_HERE_TO_WORK"; 
+        // END: PASTE YOUR DEPLOYED URL HERE
         
         // Polling interval (how often to check for new messages in milliseconds)
         const POLLING_INTERVAL = 1000; 
@@ -115,7 +123,7 @@
         // Available Emojis for reaction UI
         const REACTION_EMOJIS = ['👍', '❤️', '😂'];
 
-        // === CONFIGURATION END ===
+        // === CONFIGURATION END === //
         
         const messageContainer = document.getElementById('messageContainer');
         const chatForm = document.getElementById('chatForm');
@@ -185,7 +193,8 @@
 
         // 2. Fetch and Display Messages
         async function fetchMessages() {
-            if (GAS_WEB_APP_URL === "YOUR_DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") {
+            // Check for placeholder URL here and display the configuration error
+            if (GAS_WEB_APP_URL === "YOUR_APPS_SCRIPT_URL_MUST_BE_PASTED_HERE_TO_WORK") {
                 displayError("Configuration Error: Please update GAS_WEB_APP_URL in the script.");
                 return;
             }
@@ -308,6 +317,8 @@
 
         // 4. Handle Delete Message
         async function deleteMessage(timestampISO) {
+            // NOTE: Custom model/modal for confirmation is omitted for simplicity in this chat app.
+            // In a production app, use a custom UI dialog instead of native browser prompts.
             const userConfirmed = true; 
             if (!userConfirmed) return;
 
