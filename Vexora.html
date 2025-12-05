@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Sheet Chat</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        /* Custom scrollbar for message container */
+        .message-container::-webkit-scrollbar { width: 8px; }
+        .message-container::-webkit-scrollbar-thumb { background-color: #a0aec0; border-radius: 4px; }
+        .message-container::-webkit-scrollbar-track { background-color: #edf2f7; }
+        /* Ensuring the main content takes up the screen height minus the input field */
+        .h-full-screen { height: 100vh; }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="h-full-screen flex justify-center items-center p-4">
+        <div class="w-full max-w-lg bg-white shadow-2xl rounded-xl flex flex-col h-[90vh]">
+            
+            <!-- Header -->
+            <header class="p-4 border-b bg-indigo-600 rounded-t-xl">
+                <h1 class="text-xl font-bold text-white">Simple Sheet Chat</h1>
+                <p id="usernameDisplay" class="text-sm text-indigo-200">User: Waiting...</p>
+            </header>
+
+            <!-- Message Display Area -->
+            <div id="messageContainer" class="message-container flex-grow overflow-y-auto p-4 space-y-4">
+                <div id="loader" class="text-center py-8 text-gray-500">Loading messages...</div>
+                <!-- Messages will be injected here -->
+            </div>
+
+            <!-- Input and Send Form -->
+            <form id="chatForm" class="p-4 border-t bg-gray-50 rounded-b-xl">
+                <div class="flex space-x-2">
+                    <input type="text" id="messageInput" placeholder="Type your message..." required 
+                           class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 shadow-inner">
+                    <button type="submit" id="sendButton"
+                            class="bg-indigo-600 text-white p-3 rounded-lg font-semibold hover:bg-indigo-700 transition duration-150 shadow-md disabled:bg-indigo-400">
+                        Send
+                    </button>
+                </div>
+                <div id="errorBox" class="text-red-600 text-sm mt-2 hidden"></div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // === CONFIGURATION START ===
+
+        // !!! IMPORTANT !!!
+        // This is now set to your specific deployed Google Apps Script URL.
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzAkQl4I1NyC93ea2CmDMsxdiyJJ195QRF4GiLqf0CdIXrF-P3m3yr_MFpo-1Llik4T/exec"; 
+        
+        // Polling interval (how often to check for new messages in milliseconds)
+        const POLLING_INTERVAL = 3000; 
+
+        // === CONFIGURATION END ===
+        
+        const messageContainer = document.getElementById('messageContainer');
+        const chatForm = document.getElementById('chatForm');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const usernameDisplay = document.getElementById('usernameDisplay');
+        const errorBox = document.getElementById('errorBox');
+        const loader = document.getElementById('loader');
+
+        let userName = localStorage.getItem('chatUserName');
+
+        // 1. Get/Set Username
+        function getUsername() {
+            if (!userName) {
+                // Using a custom input box instead of the browser's prompt for better UX
+                const customPrompt = document.createElement('div');
+                customPrompt.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
+                // Corrected string definition to use template literals (backticks)
+                customPrompt.innerHTML = `
+                    <div class="bg-white p-6 rounded-lg shadow-2xl w-80">
+                        <p class="font-bold text-lg mb-4">Welcome to Sheet Chat!</p>
+                        <input type="text" id="promptInput" placeholder="Enter your name" 
+                               class="w-full p-2 border border-gray-300 rounded-md mb-4 focus:ring-indigo-500 focus:border-indigo-500">
+                        <button id="promptButton" class="w-full bg-indigo-600 text-white p-2 rounded-md hover:bg-indigo-700">Join Chat</button>
+                    </div>
+                `;
+                document.body.appendChild(customPrompt);
+                
+                const promptInput = document.getElementById('promptInput');
+                const promptButton = document.getElementById('promptButton');
+
+                const handleJoin = () => {
+                    let input = promptInput.value.trim();
+                    userName = input || 'Anonymous';
+                    localStorage.setItem('chatUserName', userName);
+                    // Corrected string definition to use template literals (backticks)
+                    usernameDisplay.textContent = `User: ${userName}`;
+                    document.body.removeChild(customPrompt);
+                };
+
+                promptButton.addEventListener('click', handleJoin);
+                promptInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleJoin();
+                    }
+                });
+                
+                promptInput.focus();
+            }
+            // Corrected string definition to use template literals (backticks)
+            usernameDisplay.textContent = `User: ${userName}`;
+        }
+
+        // 2. Fetch and Display Messages
+        async function fetchMessages() {
+            if (GAS_WEB_APP_URL === "YOUR_DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") {
+                displayError("Configuration Error: Please update GAS_WEB_APP_URL in the script.");
+                return;
+            }
+
+            // Use exponential backoff for robustness (up to 3 retries)
+            let maxRetries = 3;
+            let delay = 1000;
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(GAS_WEB_APP_URL + "?action=getMessages");
+                    
+                    // Corrected string definition to use template literals (backticks)
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (result.status === 'success') {
+                        renderMessages(result.messages);
+                        errorBox.classList.add('hidden');
+                        // Hide loader after first successful fetch
+                        if (loader) loader.classList.add('hidden');
+                        return; // Success, exit function
+                    } else {
+                        throw new Error(result.error || "Failed to fetch messages with unknown error.");
+                    }
+
+                } catch (error) {
+                    // Corrected string definition to use template literals (backticks)
+                    console.error(`Fetch error (Attempt ${i + 1}):`, error);
+                    if (i === maxRetries - 1) {
+                        displayError("Connection error. Could not fetch messages after multiple retries.");
+                    } else {
+                        // Wait for the calculated delay before retrying
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // Exponential backoff
+                    }
+                }
+            }
+        }
+
+        // 3. Render Messages
+        function renderMessages(messages) {
+            const currentScrollHeight = messageContainer.scrollHeight;
+            const currentScrollTop = messageContainer.scrollTop;
+            const clientHeight = messageContainer.clientHeight;
+            const shouldScroll = (currentScrollTop + clientHeight) >= currentScrollHeight - 20; // Scroll if close to bottom
+
+            messageContainer.innerHTML = ''; // Clear previous messages
+            
+            messages.forEach(msg => {
+                const isMine = msg.username === userName;
+                const messageDiv = document.createElement('div');
+                
+                // Determine alignment and color based on sender
+                const alignment = isMine ? 'justify-end' : 'justify-start';
+                const bgColor = isMine ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-800';
+                
+                // Format timestamp
+                let timeString = '';
+                try {
+                    timeString = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } catch {
+                    timeString = 'N/A'; // Handle invalid timestamps
+                }
+
+                messageDiv.className = `flex ${alignment}`;
+                // Corrected string definition to use template literals (backticks)
+                messageDiv.innerHTML = `
+                    <div class="max-w-xs md:max-w-md p-3 rounded-xl shadow-md ${bgColor}">
+                        <p class="font-semibold text-xs mb-1 ${isMine ? 'text-indigo-200' : 'text-gray-600'}">${isMine ? 'You' : msg.username}</p>
+                        <p class="text-sm">${msg.message}</p>
+                        <p class="text-xs mt-1 text-right ${isMine ? 'text-indigo-300' : 'text-gray-500'}">${timeString}</p>
+                    </div>
+                `;
+                messageContainer.appendChild(messageDiv);
+            });
+
+            // Auto-scroll logic
+            if (shouldScroll) {
+                messageContainer.scrollTop = messageContainer.scrollHeight;
+            }
+        }
+
+        // 4. Handle Form Submission
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+
+            if (!message) return;
+
+            sendButton.disabled = true;
+            sendButton.textContent = 'Sending...';
+
+            const payload = {
+                action: 'postMessage',
+                username: userName,
+                message: message,
+            };
+
+            // Use exponential backoff for robustness (up to 3 retries)
+            let maxRetries = 3;
+            let delay = 1000;
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(GAS_WEB_APP_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams(payload),
+                    });
+                    
+                    // Corrected string definition to use template literals (backticks)
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (result.status === 'success') {
+                        messageInput.value = ''; // Clear input on success
+                        fetchMessages(); // Refresh messages immediately
+                        errorBox.classList.add('hidden');
+                        return; // Success, exit loop and function
+                    } else {
+                        throw new Error(result.error || "Failed to send message with unknown error.");
+                    }
+
+                } catch (error) {
+                    // Corrected string definition to use template literals (backticks)
+                    console.error(`Post error (Attempt ${i + 1}):`, error);
+                    if (i === maxRetries - 1) {
+                        displayError("Could not send message after multiple retries.");
+                    } else {
+                        // Wait for the calculated delay before retrying
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // Exponential backoff
+                    }
+                } finally {
+                    // Only re-enable button and reset text after the final attempt
+                    if (i === maxRetries - 1 || sendButton.disabled === false) {
+                        sendButton.disabled = false;
+                        sendButton.textContent = 'Send';
+                    }
+                }
+            }
+            sendButton.disabled = false;
+            sendButton.textContent = 'Send';
+        });
+
+        // 5. Error Display
+        function displayError(message) {
+            // Corrected string definition to use template literals (backticks)
+            errorBox.textContent = `Error: ${message}`;
+            errorBox.classList.remove('hidden');
+        }
+
+        // === Initialization ===
+        getUsername();
+        fetchMessages();
+        
+        // Start polling for new messages
+        setInterval(fetchMessages, POLLING_INTERVAL);
+
+    </script>
+</body>
+</html>
