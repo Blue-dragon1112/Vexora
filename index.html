@@ -89,7 +89,7 @@
             <form id="chatForm" class="p-4 border-t bg-white rounded-b-xl">
                 <div class="flex space-x-2">
                     <input type="text" id="messageInput" placeholder="Type your message..." required 
-                           class="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition duration-150 shadow-inner">
+                            class="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition duration-150 shadow-inner">
                     <button type="submit" id="sendButton"
                             class="bg-violet-600 text-white w-12 h-12 rounded-full font-semibold hover:bg-violet-700 transition duration-150 shadow-md flex items-center justify-center disabled:bg-violet-400">
                         <!-- Send Icon -->
@@ -104,6 +104,8 @@
     </div>
 
     <script>
+        // *** CONFIGURATION ***
+        // 🚨 IMPORTANT: Replace this URL with your actual deployed Google Apps Script Web App URL
         const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzAkQl4I1NyC93ea2CmDMsxdiyJJ195QRF4GiLqf0CdIXrF-P3m3yr_MFpo-1Llik4T/exec"; 
         
         // Polling interval (how often to check for new messages in milliseconds)
@@ -180,14 +182,8 @@
             usernameDisplay.textContent = `User: ${userName}`;
         }
 
-        // 2. Fetch and Display Messages
+        // 2. Fetch and Display Messages - This function retrieves ALL messages from the Google Sheet
         async function fetchMessages() {
-            // Check for placeholder URL here and display the configuration error
-            if (GAS_WEB_APP_URL === "YOUR_APPS_SCRIPT_URL_MUST_BE_PASTED_HERE_TO_WORK") {
-                displayError("Configuration Error: Please update GAS_WEB_APP_URL in the script.");
-                return;
-            }
-
             let maxRetries = 3;
             let delay = 1000;
 
@@ -202,6 +198,7 @@
                     const result = await response.json();
 
                     if (result.status === 'success') {
+                        // The core logic to retrieve everything is here:
                         renderMessages(result.messages);
                         errorBox.classList.add('hidden');
                         if (loader) loader.classList.add('hidden');
@@ -227,8 +224,10 @@
             const currentScrollHeight = messageContainer.scrollHeight;
             const currentScrollTop = messageContainer.scrollTop;
             const clientHeight = messageContainer.clientHeight;
+            // Check if we are near the bottom (within 100px)
             const shouldScroll = (currentScrollTop + clientHeight) >= currentScrollHeight - 100; 
 
+            // IMPORTANT: Clear container before re-rendering everything
             messageContainer.innerHTML = ''; 
             
             messages.forEach(msg => {
@@ -304,10 +303,10 @@
             }
         }
 
-        // 4. Handle Delete Message
-        async function deleteMessage(timestampISO) {
-            // NOTE: Custom model/modal for confirmation is omitted for simplicity in this chat app.
-            // In a production app, use a custom UI dialog instead of native browser prompts.
+        // 4. Handle Delete Message (Exposed globally)
+        window.deleteMessage = async function(timestampISO) {
+            // Note: Using an internal model/modal for confirmation is preferred over native browser prompts.
+            // Simplified for this environment.
             const userConfirmed = true; 
             if (!userConfirmed) return;
 
@@ -321,8 +320,8 @@
             fetchMessages(); 
         }
 
-        // 5. Handle React Message
-        async function reactMessage(timestampISO, emoji) {
+        // 5. Handle React Message (Exposed globally)
+        window.reactMessage = async function(timestampISO, emoji) {
             const payload = {
                 action: 'reactMessage',
                 timestamp: timestampISO,
@@ -414,7 +413,7 @@
         getUsername();
         fetchMessages();
         
-        // Start polling for new messages
+        // Start polling for new messages (which also pulls the entire history)
         setInterval(fetchMessages, POLLING_INTERVAL);
 
     </script>
