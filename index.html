@@ -3,27 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vexora Chat</title>
+    <title>Vexora Chat (Sheets Backend)</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        /* Custom body background with a subtle gradient */
+        /* Custom body background */
         body { 
             font-family: 'Inter', sans-serif; 
-            background: linear-gradient(135deg, #eef2ff 0%, #dde7ff 100%); 
+            background: linear-gradient(135deg, #f5f7fa 0%, #e0e6ed 100%); 
         }
         /* Custom scrollbar for message container */
-        .message-container::-webkit-scrollbar { width: 8px; }
-        .message-container::-webkit-scrollbar-thumb { background-color: #a0aec0; border-radius: 4px; }
-        .message-container::-webkit-scrollbar-track { background-color: #edf2f7; }
-        /* Ensuring the main content takes up the screen height minus the input field */
+        .message-container::-webkit-scrollbar { width: 6px; }
+        .message-container::-webkit-scrollbar-thumb { background-color: #cbd5e0; border-radius: 3px; }
+        .message-container::-webkit-scrollbar-track { background-color: transparent; }
         .h-full-screen { height: 100vh; }
 
-        /* Reaction buttons hidden by default, visible on hover */
+        /* --- iOS-Inspired Bubble Styling --- */
+        
+        /* Your messages (Blue Bubble) */
+        .bubble-mine {
+            background-color: #0B93F6; /* Bright Blue */
+            color: white;
+            /* Rounded corners: sharp top-right (0.5rem) */
+            border-radius: 1.5rem 0.5rem 1.5rem 1.5rem; 
+            box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+        }
+        /* Other users' messages (White Bubble) */
+        .bubble-other {
+            background-color: white;
+            color: #1f2937; /* Dark Gray text */
+            /* Rounded corners: sharp top-left (0.5rem) */
+            border-radius: 0.5rem 1.5rem 1.5rem 1.5rem;
+            box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Reactions Container: Appears on hover/tap */
+        .reactions-container {
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none; 
+        }
         .message-bubble:hover .reactions-container {
             opacity: 1;
             transform: translateY(-5px);
+            pointer-events: auto; 
+        }
+        .reactions-container button {
+            transition: transform 0.1s;
+        }
+        .reactions-container button:hover {
+            transform: scale(1.2);
+        }
+
+        /* Small header style improvement */
+        header {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
     </style>
 </head>
@@ -32,33 +67,35 @@
     <div id="app" class="h-full-screen flex justify-center items-center p-4">
         <div class="w-full max-w-lg bg-white shadow-2xl rounded-xl flex flex-col h-[90vh]">
             
-            <!-- Header (Violet theme) -->
-            <header class="p-4 border-b bg-violet-700 rounded-t-xl flex justify-between items-center">
+            <!-- Header (Cleaned up violet theme) -->
+            <header class="p-4 border-b bg-violet-600 rounded-t-xl flex justify-between items-center">
                 <h1 class="text-xl font-extrabold text-white">Vexora Chat</h1>
                 <div class="flex items-center space-x-3">
-                    <!-- Display only the user name, but rely on the hidden userId for logic -->
-                    <p id="usernameDisplay" class="text-sm text-violet-200">User: Waiting...</p>
+                    <p id="usernameDisplay" class="text-sm font-medium text-violet-200">User: Waiting...</p>
                     <button id="changeUserButton" onclick="clearUsername()" 
-                            class="text-xs bg-violet-500 hover:bg-violet-600 text-white py-1 px-3 rounded-full transition duration-150 shadow-sm">
+                            class="text-xs bg-violet-400 hover:bg-violet-500 text-white py-1 px-3 rounded-full transition duration-150 shadow-sm">
                         Change User
                     </button>
                 </div>
             </header>
 
             <!-- Message Display Area -->
-            <div id="messageContainer" class="message-container flex-grow overflow-y-auto p-4 space-y-6">
+            <div id="messageContainer" class="message-container flex-grow overflow-y-auto p-4 space-y-3">
                 <div id="loader" class="text-center py-8 text-gray-500">Loading messages...</div>
                 <!-- Messages will be injected here -->
             </div>
 
             <!-- Input and Send Form -->
-            <form id="chatForm" class="p-4 border-t bg-gray-50 rounded-b-xl">
+            <form id="chatForm" class="p-4 border-t bg-white rounded-b-xl">
                 <div class="flex space-x-2">
                     <input type="text" id="messageInput" placeholder="Type your message..." required 
-                           class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition duration-150 shadow-inner">
+                           class="flex-grow p-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition duration-150 shadow-inner">
                     <button type="submit" id="sendButton"
-                            class="bg-violet-600 text-white p-3 rounded-lg font-semibold hover:bg-violet-700 transition duration-150 shadow-md disabled:bg-violet-400">
-                        Send
+                            class="bg-violet-600 text-white w-12 h-12 rounded-full font-semibold hover:bg-violet-700 transition duration-150 shadow-md flex items-center justify-center disabled:bg-violet-400">
+                        <!-- Send Icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transform rotate-45 translate-x-0.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.732.934l5 1.429a1 1 0 001.169-1.409l-7-14z" />
+                        </svg>
                     </button>
                 </div>
                 <div id="errorBox" class="text-red-600 text-sm mt-2 hidden"></div>
@@ -69,12 +106,11 @@
     <script>
         // === CONFIGURATION START ===
 
-        // !!! IMPORTANT !!!
-        // This is now set to your specific deployed Google Apps Script URL.
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzAkQl4I1NyC93ea2CmDMsxdiyJJ195QRF4GiLqf0CdIXrF-P3m3yr_MFpo-1Llik4T/exec"; 
+        // !!! IMPORTANT: YOU MUST UPDATE THIS URL AFTER DEPLOYING THE GOOGLE APPS SCRIPT BELOW !!!
+        const GAS_WEB_APP_URL = "YOUR_DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE"; 
         
         // Polling interval (how often to check for new messages in milliseconds)
-        const POLLING_INTERVAL = 1000; // Reduced to 1 second for faster updates
+        const POLLING_INTERVAL = 1000; 
 
         // Available Emojis for reaction UI
         const REACTION_EMOJIS = ['👍', '❤️', '😂'];
@@ -89,7 +125,7 @@
         const errorBox = document.getElementById('errorBox');
         const loader = document.getElementById('loader');
 
-        // NEW: Get both display name and persistent ID
+        // Get both display name and persistent ID from localStorage
         let userName = localStorage.getItem('chatUserName');
         let userId = localStorage.getItem('chatUserId');
 
@@ -110,7 +146,7 @@
             }
 
             if (!userName) {
-                // Using a custom input box instead of the browser's prompt for better UX
+                // Custom input box for username
                 const customPrompt = document.createElement('div');
                 customPrompt.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 backdrop-blur-sm';
                 customPrompt.innerHTML = `
@@ -154,7 +190,6 @@
                 return;
             }
 
-            // Use exponential backoff for robustness (up to 3 retries)
             let maxRetries = 3;
             let delay = 1000;
 
@@ -171,9 +206,8 @@
                     if (result.status === 'success') {
                         renderMessages(result.messages);
                         errorBox.classList.add('hidden');
-                        // Hide loader after first successful fetch
                         if (loader) loader.classList.add('hidden');
-                        return; // Success, exit function
+                        return; 
                     } else {
                         throw new Error(result.error || "Failed to fetch messages with unknown error.");
                     }
@@ -183,9 +217,8 @@
                     if (i === maxRetries - 1) {
                         displayError("Connection error. Could not fetch messages after multiple retries.");
                     } else {
-                        // Wait for the calculated delay before retrying
                         await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2; // Exponential backoff
+                        delay *= 2; 
                     }
                 }
             }
@@ -196,18 +229,18 @@
             const currentScrollHeight = messageContainer.scrollHeight;
             const currentScrollTop = messageContainer.scrollTop;
             const clientHeight = messageContainer.clientHeight;
-            const shouldScroll = (currentScrollTop + clientHeight) >= currentScrollHeight - 20; // Scroll if close to bottom
+            const shouldScroll = (currentScrollTop + clientHeight) >= currentScrollHeight - 100; 
 
-            messageContainer.innerHTML = ''; // Clear previous messages
+            messageContainer.innerHTML = ''; 
             
             messages.forEach(msg => {
-                // IMPORTANT CHANGE: Check ownership using the persistent userId
+                // Check ownership using the persistent userId
                 const isMine = msg.userId === userId; 
                 const messageDiv = document.createElement('div');
                 
-                // Determine alignment and color based on sender
+                // Determine alignment and custom bubble class
                 const alignment = isMine ? 'justify-end' : 'justify-start';
-                const bgColor = isMine ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-800';
+                const bubbleClass = isMine ? 'bubble-mine' : 'bubble-other';
                 
                 // Format timestamp
                 let timeString = '';
@@ -215,48 +248,51 @@
                 try {
                     const date = new Date(msg.timestamp);
                     timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    timestampISO = date.toISOString(); // Use ISO string as unique key
+                    timestampISO = date.toISOString(); 
                 } catch {
                     timeString = 'N/A'; 
                 }
 
-                messageDiv.className = `flex ${alignment} relative`; // Added relative for absolute positioning of reactions
+                messageDiv.className = `flex ${alignment} relative`; 
 
-                // Reaction and Delete actions now rely on the backend checking if the user ID matches the message's stored ID
+                // Reaction and Delete actions
                 const reactionButtons = REACTION_EMOJIS.map(emoji => `
-                    <button class="reaction-btn text-sm hover:scale-110 transition duration-100" 
+                    <button class="reaction-btn text-lg hover:scale-110 transition duration-100" 
                             onclick="reactMessage('${timestampISO}', '${emoji}')">${emoji}</button>
                 `).join('');
                 
                 // Delete button is only rendered if the message is mine (based on userId)
                 const deleteButtonHtml = isMine ? `
-                    <button class="text-red-400 hover:text-red-600 text-lg ml-2 transition duration-100" 
+                    <button class="text-red-400 hover:text-red-600 text-xl ml-2 transition duration-100" 
                             onclick="deleteMessage('${timestampISO}')" title="Delete Message">
                         &times;
                     </button>
                 ` : '';
 
+                // Reaction badge styling
                 const reactionsDisplay = msg.reactions ? `
-                    <span class="absolute bottom-[-10px] ${isMine ? 'right-0' : 'left-0'} bg-white text-xs px-2 py-0.5 rounded-full shadow-lg border border-gray-200 cursor-default">
+                    <span class="reactions-badge absolute ${isMine ? 'right-0' : 'left-0'} bottom-[-10px] bg-white text-xs px-2 py-0.5 rounded-full shadow-lg border border-gray-200 cursor-default transition duration-150">
                         ${msg.reactions}
                     </span>
                 ` : '';
+                
+                // Username display for others (hidden for your own message)
+                const usernameHtml = !isMine ? `<p class="font-semibold text-xs mb-1 text-gray-600">${msg.username}</p>` : '';
 
 
                 messageDiv.innerHTML = `
                     <div class="flex flex-col max-w-xs md:max-w-md">
                         <!-- Reaction Picker/Delete Button Container -->
-                        <!-- This is only visible on hover (or touch) and allows interaction with any message -->
-                        <div class="reactions-container absolute top-0 ${isMine ? 'left-[-100px]' : 'right-[-100px]'} flex space-x-1 p-1 bg-white rounded-full shadow-lg border border-gray-200 opacity-0 transition duration-300 pointer-events-none md:pointer-events-auto">
+                        <div class="reactions-container absolute z-10 top-[-30px] ${isMine ? 'right-0' : 'left-0'} flex space-x-1 p-1 bg-white rounded-full shadow-xl border border-gray-200">
                             ${reactionButtons}
                             ${deleteButtonHtml}
                         </div>
 
                         <!-- Message Bubble -->
-                        <div class="message-bubble p-3 rounded-xl shadow-md ${bgColor} relative mt-2">
-                            <p class="font-semibold text-xs mb-1 ${isMine ? 'text-violet-200' : 'text-gray-600'}">${isMine ? 'You' : msg.username}</p>
+                        <div class="message-bubble p-3 relative mt-2 transition duration-300 ${bubbleClass}">
+                            ${usernameHtml}
                             <p class="text-sm">${msg.message}</p>
-                            <p class="text-xs mt-1 text-right ${isMine ? 'text-violet-300' : 'text-gray-500'}">${timeString}</p>
+                            <p class="text-xs mt-1 text-right ${isMine ? 'text-blue-200' : 'text-gray-500'}">${timeString}</p>
                             ${reactionsDisplay}
                         </div>
                     </div>
@@ -281,7 +317,7 @@
                 userId: userId, // Pass userId for backend validation
             };
             
-            await sendPostRequest(payload, 'Deleting message...');
+            await sendPostRequest(payload, 'Deleting...');
             fetchMessages(); 
         }
 
@@ -294,14 +330,14 @@
                 userId: userId, // Pass userId for backend reaction logic (e.g., toggling)
             };
             
-            await sendPostRequest(payload, 'Adding reaction...');
+            await sendPostRequest(payload, 'Reacting...');
             fetchMessages(); 
         }
 
         // 6. Generic POST Request Handler
         async function sendPostRequest(payload, loadingText) {
             sendButton.disabled = true;
-            sendButton.textContent = loadingText || 'Processing...';
+            sendButton.innerHTML = `<span class="text-xs">${loadingText}</span>`; 
 
             let maxRetries = 3;
             let delay = 1000;
@@ -324,7 +360,7 @@
 
                     if (result.status === 'success') {
                         errorBox.classList.add('hidden');
-                        return; // Success, exit loop and function
+                        return; 
                     } else {
                         throw new Error(result.error || "Failed to process request with unknown error.");
                     }
@@ -335,12 +371,13 @@
                         displayError(`Could not complete request after multiple retries: ${error.message}`);
                     } else {
                         await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2; // Exponential backoff
+                        delay *= 2; 
                     }
                 }
             }
             sendButton.disabled = false;
-            sendButton.textContent = 'Send';
+            // Restore send icon
+            sendButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transform rotate-45 translate-x-0.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.732.934l5 1.429a1 1 0 001.169-1.409l-7-14z" /></svg>`;
         }
 
 
@@ -355,7 +392,7 @@
                 action: 'postMessage',
                 username: userName,
                 message: message,
-                userId: userId, // NEW: Include persistent ID
+                userId: userId, // Include persistent ID
             };
 
             await sendPostRequest(payload, 'Sending...');
@@ -364,7 +401,7 @@
             messageInput.value = '';
             fetchMessages(); 
             sendButton.disabled = false;
-            sendButton.textContent = 'Send';
+            sendButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transform rotate-45 translate-x-0.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.732.934l5 1.429a1 1 0 001.169-1.409l-7-14z" /></svg>`;
         });
 
         // 8. Error Display
