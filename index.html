@@ -6,7 +6,7 @@
     <title>Vexora Chat</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
         /* Custom body background with a subtle gradient */
         body { 
@@ -19,6 +19,12 @@
         .message-container::-webkit-scrollbar-track { background-color: #edf2f7; }
         /* Ensuring the main content takes up the screen height minus the input field */
         .h-full-screen { height: 100vh; }
+
+        /* Reaction buttons hidden by default, visible on hover */
+        .message-bubble:hover .reactions-container {
+            opacity: 1;
+            transform: translateY(-5px);
+        }
     </style>
 </head>
 <body>
@@ -27,13 +33,19 @@
         <div class="w-full max-w-lg bg-white shadow-2xl rounded-xl flex flex-col h-[90vh]">
             
             <!-- Header (Violet theme) -->
-            <header class="p-4 border-b bg-violet-700 rounded-t-xl">
-                <h1 class="text-xl font-bold text-white">Vexora Chat</h1>
-                <p id="usernameDisplay" class="text-sm text-violet-200">User: Waiting...</p>
+            <header class="p-4 border-b bg-violet-700 rounded-t-xl flex justify-between items-center">
+                <h1 class="text-xl font-extrabold text-white">Vexora Chat</h1>
+                <div class="flex items-center space-x-3">
+                    <p id="usernameDisplay" class="text-sm text-violet-200">User: Waiting...</p>
+                    <button id="changeUserButton" onclick="clearUsername()" 
+                            class="text-xs bg-violet-500 hover:bg-violet-600 text-white py-1 px-3 rounded-full transition duration-150 shadow-sm">
+                        Change User
+                    </button>
+                </div>
             </header>
 
             <!-- Message Display Area -->
-            <div id="messageContainer" class="message-container flex-grow overflow-y-auto p-4 space-y-4">
+            <div id="messageContainer" class="message-container flex-grow overflow-y-auto p-4 space-y-6">
                 <div id="loader" class="text-center py-8 text-gray-500">Loading messages...</div>
                 <!-- Messages will be injected here -->
             </div>
@@ -63,6 +75,9 @@
         // Polling interval (how often to check for new messages in milliseconds)
         const POLLING_INTERVAL = 1000; // Reduced to 1 second for faster updates
 
+        // Available Emojis for reaction UI
+        const REACTION_EMOJIS = ['👍', '❤️', '😂'];
+
         // === CONFIGURATION END ===
         
         const messageContainer = document.getElementById('messageContainer');
@@ -75,19 +90,24 @@
 
         let userName = localStorage.getItem('chatUserName');
 
+        // Helper for Sign Out / Change Name
+        function clearUsername() {
+            localStorage.removeItem('chatUserName');
+            window.location.reload();
+        }
+
         // 1. Get/Set Username
         function getUsername() {
             if (!userName) {
                 // Using a custom input box instead of the browser's prompt for better UX
                 const customPrompt = document.createElement('div');
-                customPrompt.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
-                // Corrected string definition to use template literals (backticks)
+                customPrompt.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 backdrop-blur-sm';
                 customPrompt.innerHTML = `
-                    <div class="bg-white p-6 rounded-lg shadow-2xl w-80">
-                        <p class="font-bold text-lg mb-4">Welcome to Vexora Chat!</p>
+                    <div class="bg-white p-6 rounded-xl shadow-2xl w-80 transform transition duration-300 ease-in-out scale-100">
+                        <p class="font-bold text-xl mb-4 text-violet-700">Welcome to Vexora Chat!</p>
                         <input type="text" id="promptInput" placeholder="Enter your name" 
-                               class="w-full p-2 border border-gray-300 rounded-md mb-4 focus:ring-violet-500 focus:border-violet-500">
-                        <button id="promptButton" class="w-full bg-violet-600 text-white p-2 rounded-md hover:bg-violet-700">Join Chat</button>
+                               class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-violet-500 focus:border-violet-500 transition duration-150">
+                        <button id="promptButton" class="w-full bg-violet-600 text-white p-3 rounded-lg font-semibold hover:bg-violet-700 shadow-lg transition duration-150">Join Chat</button>
                     </div>
                 `;
                 document.body.appendChild(customPrompt);
@@ -99,7 +119,6 @@
                     let input = promptInput.value.trim();
                     userName = input || 'Anonymous';
                     localStorage.setItem('chatUserName', userName);
-                    // Corrected string definition to use template literals (backticks)
                     usernameDisplay.textContent = `User: ${userName}`;
                     document.body.removeChild(customPrompt);
                 };
@@ -114,7 +133,6 @@
                 
                 promptInput.focus();
             }
-            // Corrected string definition to use template literals (backticks)
             usernameDisplay.textContent = `User: ${userName}`;
         }
 
@@ -133,7 +151,6 @@
                 try {
                     const response = await fetch(GAS_WEB_APP_URL + "?action=getMessages");
                     
-                    // Corrected string definition to use template literals (backticks)
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
@@ -151,7 +168,6 @@
                     }
 
                 } catch (error) {
-                    // Corrected string definition to use template literals (backticks)
                     console.error(`Fetch error (Attempt ${i + 1}):`, error);
                     if (i === maxRetries - 1) {
                         displayError("Connection error. Could not fetch messages after multiple retries.");
@@ -179,24 +195,55 @@
                 
                 // Determine alignment and color based on sender
                 const alignment = isMine ? 'justify-end' : 'justify-start';
-                // Updated my messages color to violet-600
                 const bgColor = isMine ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-800';
                 
                 // Format timestamp
                 let timeString = '';
+                let timestampISO = '';
                 try {
-                    timeString = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const date = new Date(msg.timestamp);
+                    timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    timestampISO = date.toISOString(); // Use ISO string as unique key
                 } catch {
-                    timeString = 'N/A'; // Handle invalid timestamps
+                    timeString = 'N/A'; 
                 }
 
-                messageDiv.className = `flex ${alignment}`;
-                // Corrected string definition to use template literals (backticks)
+                messageDiv.className = `flex ${alignment} relative`; // Added relative for absolute positioning of reactions
+
+                const reactionButtons = REACTION_EMOJIS.map(emoji => `
+                    <button class="reaction-btn text-sm hover:scale-110 transition duration-100" 
+                            onclick="reactMessage('${timestampISO}', '${emoji}')">${emoji}</button>
+                `).join('');
+                
+                const deleteButtonHtml = isMine ? `
+                    <button class="text-red-400 hover:text-red-600 text-lg ml-2 transition duration-100" 
+                            onclick="deleteMessage('${timestampISO}')" title="Delete Message">
+                        &times;
+                    </button>
+                ` : '';
+
+                const reactionsDisplay = msg.reactions ? `
+                    <span class="absolute bottom-[-10px] ${isMine ? 'right-0' : 'left-0'} bg-white text-xs px-2 py-0.5 rounded-full shadow-lg border border-gray-200 cursor-default">
+                        ${msg.reactions}
+                    </span>
+                ` : '';
+
+
                 messageDiv.innerHTML = `
-                    <div class="max-w-xs md:max-w-md p-3 rounded-xl shadow-md ${bgColor}">
-                        <p class="font-semibold text-xs mb-1 ${isMine ? 'text-violet-200' : 'text-gray-600'}">${isMine ? 'You' : msg.username}</p>
-                        <p class="text-sm">${msg.message}</p>
-                        <p class="text-xs mt-1 text-right ${isMine ? 'text-violet-300' : 'text-gray-500'}">${timeString}</p>
+                    <div class="flex flex-col max-w-xs md:max-w-md">
+                        <!-- Reaction Picker/Delete Button Container -->
+                        <div class="reactions-container absolute top-0 ${isMine ? 'left-[-100px]' : 'right-[-100px]'} flex space-x-1 p-1 bg-white rounded-full shadow-lg border border-gray-200 opacity-0 transition duration-300 pointer-events-none md:pointer-events-auto">
+                            ${reactionButtons}
+                            ${deleteButtonHtml}
+                        </div>
+
+                        <!-- Message Bubble -->
+                        <div class="message-bubble p-3 rounded-xl shadow-md ${bgColor} relative mt-2">
+                            <p class="font-semibold text-xs mb-1 ${isMine ? 'text-violet-200' : 'text-gray-600'}">${isMine ? 'You' : msg.username}</p>
+                            <p class="text-sm">${msg.message}</p>
+                            <p class="text-xs mt-1 text-right ${isMine ? 'text-violet-300' : 'text-gray-500'}">${timeString}</p>
+                            ${reactionsDisplay}
+                        </div>
                     </div>
                 `;
                 messageContainer.appendChild(messageDiv);
@@ -208,23 +255,37 @@
             }
         }
 
-        // 4. Handle Form Submission
-        chatForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const message = messageInput.value.trim();
-
-            if (!message) return;
-
-            sendButton.disabled = true;
-            sendButton.textContent = 'Sending...';
+        // 4. Handle Delete Message
+        async function deleteMessage(timestampISO) {
+            const userConfirmed = true; // No window.confirm allowed, assuming user confirms intent via button click.
+            if (!userConfirmed) return;
 
             const payload = {
-                action: 'postMessage',
-                username: userName,
-                message: message,
+                action: 'deleteMessage',
+                timestamp: timestampISO,
             };
+            
+            await sendPostRequest(payload, 'Deleting message...');
+            fetchMessages(); // Refresh immediately after attempted deletion
+        }
 
-            // Use exponential backoff for robustness (up to 3 retries)
+        // 5. Handle React Message
+        async function reactMessage(timestampISO, emoji) {
+            const payload = {
+                action: 'reactMessage',
+                timestamp: timestampISO,
+                reaction: emoji, // Simple overwrite for now
+            };
+            
+            await sendPostRequest(payload, 'Adding reaction...');
+            fetchMessages(); // Refresh immediately after attempted reaction
+        }
+
+        // 6. Generic POST Request Handler
+        async function sendPostRequest(payload, loadingText) {
+            sendButton.disabled = true;
+            sendButton.textContent = loadingText || 'Processing...';
+
             let maxRetries = 3;
             let delay = 1000;
 
@@ -238,7 +299,6 @@
                         body: new URLSearchParams(payload),
                     });
                     
-                    // Corrected string definition to use template literals (backticks)
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
@@ -246,39 +306,51 @@
                     const result = await response.json();
 
                     if (result.status === 'success') {
-                        messageInput.value = ''; // Clear input on success
-                        fetchMessages(); // Refresh messages immediately
                         errorBox.classList.add('hidden');
                         return; // Success, exit loop and function
                     } else {
-                        throw new Error(result.error || "Failed to send message with unknown error.");
+                        throw new Error(result.error || "Failed to process request with unknown error.");
                     }
 
                 } catch (error) {
-                    // Corrected string definition to use template literals (backticks)
                     console.error(`Post error (Attempt ${i + 1}):`, error);
                     if (i === maxRetries - 1) {
-                        displayError("Could not send message after multiple retries.");
+                        displayError(`Could not complete request after multiple retries: ${error.message}`);
                     } else {
-                        // Wait for the calculated delay before retrying
                         await new Promise(resolve => setTimeout(resolve, delay));
                         delay *= 2; // Exponential backoff
-                    }
-                } finally {
-                    // Only re-enable button and reset text after the final attempt
-                    if (i === maxRetries - 1 || sendButton.disabled === false) {
-                        sendButton.disabled = false;
-                        sendButton.textContent = 'Send';
                     }
                 }
             }
             sendButton.disabled = false;
             sendButton.textContent = 'Send';
+        }
+
+
+        // 7. Handle Form Submission (calls generic POST handler)
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+
+            if (!message) return;
+
+            const payload = {
+                action: 'postMessage',
+                username: userName,
+                message: message,
+            };
+
+            await sendPostRequest(payload, 'Sending...');
+            
+            // Clear input and fetch messages only after successful send
+            messageInput.value = '';
+            fetchMessages(); 
+            sendButton.disabled = false;
+            sendButton.textContent = 'Send';
         });
 
-        // 5. Error Display
+        // 8. Error Display
         function displayError(message) {
-            // Corrected string definition to use template literals (backticks)
             errorBox.textContent = `Error: ${message}`;
             errorBox.classList.remove('hidden');
         }
