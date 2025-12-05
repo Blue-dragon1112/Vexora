@@ -36,6 +36,7 @@
             <header class="p-4 border-b bg-violet-700 rounded-t-xl flex justify-between items-center">
                 <h1 class="text-xl font-extrabold text-white">Vexora Chat</h1>
                 <div class="flex items-center space-x-3">
+                    <!-- Display only the user name, but rely on the hidden userId for logic -->
                     <p id="usernameDisplay" class="text-sm text-violet-200">User: Waiting...</p>
                     <button id="changeUserButton" onclick="clearUsername()" 
                             class="text-xs bg-violet-500 hover:bg-violet-600 text-white py-1 px-3 rounded-full transition duration-150 shadow-sm">
@@ -88,16 +89,26 @@
         const errorBox = document.getElementById('errorBox');
         const loader = document.getElementById('loader');
 
+        // NEW: Get both display name and persistent ID
         let userName = localStorage.getItem('chatUserName');
+        let userId = localStorage.getItem('chatUserId');
 
-        // Helper for Sign Out / Change Name
+        // Helper for Sign Out / Change Name: only clears the display name
         function clearUsername() {
             localStorage.removeItem('chatUserName');
+            // userId remains stored, so messages are still owned by the same unique ID
             window.location.reload();
         }
 
-        // 1. Get/Set Username
+        // 1. Get/Set Username and User ID
         function getUsername() {
+            // Check for persistent User ID first. If not found, generate one.
+            if (!userId) {
+                // Generate a unique, persistent ID for this browser/user
+                userId = crypto.randomUUID(); 
+                localStorage.setItem('chatUserId', userId);
+            }
+
             if (!userName) {
                 // Using a custom input box instead of the browser's prompt for better UX
                 const customPrompt = document.createElement('div');
@@ -190,7 +201,8 @@
             messageContainer.innerHTML = ''; // Clear previous messages
             
             messages.forEach(msg => {
-                const isMine = msg.username === userName;
+                // IMPORTANT CHANGE: Check ownership using the persistent userId
+                const isMine = msg.userId === userId; 
                 const messageDiv = document.createElement('div');
                 
                 // Determine alignment and color based on sender
@@ -210,11 +222,13 @@
 
                 messageDiv.className = `flex ${alignment} relative`; // Added relative for absolute positioning of reactions
 
+                // Reaction and Delete actions now rely on the backend checking if the user ID matches the message's stored ID
                 const reactionButtons = REACTION_EMOJIS.map(emoji => `
                     <button class="reaction-btn text-sm hover:scale-110 transition duration-100" 
                             onclick="reactMessage('${timestampISO}', '${emoji}')">${emoji}</button>
                 `).join('');
                 
+                // Delete button is only rendered if the message is mine (based on userId)
                 const deleteButtonHtml = isMine ? `
                     <button class="text-red-400 hover:text-red-600 text-lg ml-2 transition duration-100" 
                             onclick="deleteMessage('${timestampISO}')" title="Delete Message">
@@ -232,6 +246,7 @@
                 messageDiv.innerHTML = `
                     <div class="flex flex-col max-w-xs md:max-w-md">
                         <!-- Reaction Picker/Delete Button Container -->
+                        <!-- This is only visible on hover (or touch) and allows interaction with any message -->
                         <div class="reactions-container absolute top-0 ${isMine ? 'left-[-100px]' : 'right-[-100px]'} flex space-x-1 p-1 bg-white rounded-full shadow-lg border border-gray-200 opacity-0 transition duration-300 pointer-events-none md:pointer-events-auto">
                             ${reactionButtons}
                             ${deleteButtonHtml}
@@ -257,16 +272,17 @@
 
         // 4. Handle Delete Message
         async function deleteMessage(timestampISO) {
-            const userConfirmed = true; // No window.confirm allowed, assuming user confirms intent via button click.
+            const userConfirmed = true; 
             if (!userConfirmed) return;
 
             const payload = {
                 action: 'deleteMessage',
                 timestamp: timestampISO,
+                userId: userId, // Pass userId for backend validation
             };
             
             await sendPostRequest(payload, 'Deleting message...');
-            fetchMessages(); // Refresh immediately after attempted deletion
+            fetchMessages(); 
         }
 
         // 5. Handle React Message
@@ -274,11 +290,12 @@
             const payload = {
                 action: 'reactMessage',
                 timestamp: timestampISO,
-                reaction: emoji, // Simple overwrite for now
+                reaction: emoji, 
+                userId: userId, // Pass userId for backend reaction logic (e.g., toggling)
             };
             
             await sendPostRequest(payload, 'Adding reaction...');
-            fetchMessages(); // Refresh immediately after attempted reaction
+            fetchMessages(); 
         }
 
         // 6. Generic POST Request Handler
@@ -338,6 +355,7 @@
                 action: 'postMessage',
                 username: userName,
                 message: message,
+                userId: userId, // NEW: Include persistent ID
             };
 
             await sendPostRequest(payload, 'Sending...');
